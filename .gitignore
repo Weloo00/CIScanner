@@ -1,0 +1,9 @@
+# scan outputs
+out/
+*.log
+
+# local editor / OS noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

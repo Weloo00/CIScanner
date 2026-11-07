@@ -1,0 +1,180 @@
+name: Vulnerability Scan
+
+on:
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: "Target domain"
+        required: false
+        default: "example.com"
+      severity:
+        description: "Nuclei severities (comma separated)"
+        required: false
+        default: "critical,high,medium"
+      rate_limit:
+        description: "Requests per second per host"
+        required: false
+        default: "5"
+      threads:
+        description: "Parallel requests"
+        required: false
+        default: "5"
+  schedule:
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vulnscan-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: "1.22"
+  DOMAIN: ${{ github.event.inputs.domain || vars.SCAN_DOMAIN || 'example.com' }}
+  SEVERITY: ${{ github.event.inputs.severity || 'critical,high,medium' }}
+  RATE_LIMIT: ${{ github.event.inputs.rate_limit || '5' }}
+  HTTP_THREADS: ${{ github.event.inputs.threads || '5' }}
+  WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL || secrets.DISCORD_WEBHOOK }}
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+
+      - name: Install tools
+        run: |
+          go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+          go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+          go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Verify tools
+        run: |
+          subfinder -version
+          httpx -version
+          nuclei -version
+
+      - name: Enumerate subdomains
+        run: |
+          mkdir -p out
+          subfinder -d "$DOMAIN" -all -silent -o out/subdomains.raw.txt || true
+          sort -u out/subdomains.raw.txt > out/subdomains.txt || : > out/subdomains.txt
+          echo "SUBS=$(wc -l < out/subdomains.txt)" >> "$GITHUB_ENV"
+
+      - name: Resolve live hosts with httpx
+        run: |
+          if [ ! -s out/subdomains.txt ]; then
+            : > out/live-urls.txt
+            echo "LIVE=0" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          httpx -l out/subdomains.txt \
+                -silent -sc -title -td -cdn -cname -ip \
+                -rl "$RATE_LIMIT" -t "$HTTP_THREADS" -timeout 10 -retries 1 \
+                -no-color -o out/live.txt || true
+
+          # httpx prints full URLs; keep only the URL column
+          awk '{print $NF}' out/live.txt | grep -E '^https?://' | sort -u > out/live-urls.txt || : > out/live-urls.txt
+          echo "LIVE=$(wc -l < out/live-urls.txt)" >> "$GITHUB_ENV"
+
+      - name: Scan live hosts with nuclei
+        run: |
+          if [ ! -s out/live-urls.txt ]; then
+            echo "No live hosts - skipping nuclei"
+            : > out/nuclei.jsonl
+            : > out/nuclei.txt
+            echo "VULNS=0" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          nuclei -l out/live-urls.txt \
+                 -severity "$SEVERITY" \
+                 -rl "$RATE_LIMIT" -c "$HTTP_THREADS" \
+                 -timeout 10 -retries 1 \
+                 -disable-update-check -no-color \
+                 -jsonl -o out/nuclei.jsonl || true
+
+          jq -r '[.info.severity, .info.name, .host, (.matched_at // .host)] | @tsv' out/nuclei.jsonl 2>/dev/null \
+            | sort -u > out/nuclei.txt || : > out/nuclei.txt
+
+          echo "VULNS=$(wc -l < out/nuclei.txt)" >> "$GITHUB_ENV"
+
+      - name: Notify Discord - summary
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "::warning::No Discord webhook secret set (DISCORD_WEBHOOK_URL or DISCORD_WEBHOOK) - skipping notification"
+            exit 0
+          fi
+
+          TOP=$(head -n 10 out/nuclei.txt 2>/dev/null | cut -c1-180)
+          PAYLOAD=$(jq -n \
+            --arg domain "$DOMAIN" \
+            --arg subs "${SUBS:-0}" \
+            --arg live "${LIVE:-0}" \
+            --arg vulns "${VULNS:-0}" \
+            --arg details "$([ -n "$TOP" ] && printf '%s' "$TOP" || echo 'None')" \
+            --arg sev "$SEVERITY" \
+            '{
+              embeds: [{
+                title: ("Vulnerability Scan - " + $domain),
+                color: (if ($vulns|tonumber) > 0 then 15158332 else 3066993 end),
+                fields: [
+                  {name: "Subdomains", value: $subs, inline: true},
+                  {name: "Live hosts", value: $live, inline: true},
+                  {name: "Findings", value: $vulns, inline: true},
+                  {name: "Severity filter", value: $sev, inline: true},
+                  {name: "Top findings", value: $details}
+                ],
+                footer: {text: "CIScanner - subfinder + httpx + nuclei"}
+              }]
+            }')
+
+          HTTP=$(curl -sS -o /dev/null -w '%{http_code}' -X POST \
+            -H "Content-Type: application/json" -d "$PAYLOAD" "$WEBHOOK")
+          echo "Discord HTTP $HTTP"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vulnscan-${{ env.DOMAIN }}
+          path: |
+            out/subdomains.txt
+            out/live.txt
+            out/live-urls.txt
+            out/nuclei.txt
+            out/nuclei.jsonl
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Vulnerability Scan - \`$DOMAIN\`"
+            echo ""
+            echo "| Metric | Value |"
+            echo "|---|---|"
+            echo "| Subdomains | ${SUBS:-0} |"
+            echo "| Live hosts (httpx) | ${LIVE:-0} |"
+            echo "| Findings (nuclei) | ${VULNS:-0} |"
+            echo "| Severity filter | \`$SEVERITY\` |"
+            echo ""
+            if [ -s out/nuclei.txt ]; then
+              echo '```'
+              head -n 25 out/nuclei.txt
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

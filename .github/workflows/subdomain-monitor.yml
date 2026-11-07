@@ -1,0 +1,202 @@
+name: Subdomain Monitor
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: "Target domain"
+        required: false
+        default: "example.com"
+      notify_when_unchanged:
+        description: "Post to Discord even when nothing changed"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: subdomain-monitor-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: "1.22"
+  DOMAIN: ${{ github.event.inputs.domain || vars.SCAN_DOMAIN || 'example.com' }}
+  # Keep these low: they are per-host request limits, not global throughput.
+  RATE_LIMIT: "5"
+  HTTP_THREADS: "5"
+  # Accept either secret name so the repo works with the old setup too.
+  WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL || secrets.DISCORD_WEBHOOK }}
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+
+      - name: Install tools
+        run: |
+          go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+          go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Verify tools
+        run: |
+          subfinder -version
+          httpx -version
+
+      - name: Enumerate subdomains
+        run: |
+          mkdir -p out state
+          subfinder -d "$DOMAIN" -all -silent -o out/subdomains.raw.txt || true
+          sort -u out/subdomains.raw.txt > out/subdomains.txt || : > out/subdomains.txt
+          echo "SUBS=$(wc -l < out/subdomains.txt)" >> "$GITHUB_ENV"
+
+      - name: Verify live hosts with httpx
+        run: |
+          if [ ! -s out/subdomains.txt ]; then
+            : > out/live-urls.txt
+            : > out/live.tsv
+            echo "LIVE=0" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          httpx -l out/subdomains.txt \
+                -silent -json -td -sc -title -cdn -cname -ip \
+                -rl "$RATE_LIMIT" -t "$HTTP_THREADS" -timeout 10 -retries 1 \
+                -no-color -o out/live.jsonl || true
+
+          jq -r 'select(.url) | .url' out/live.jsonl 2>/dev/null | sort -u > out/live-urls.txt || : > out/live-urls.txt
+          jq -r '[.status_code, ((.tech // []) | join(",")), .url] | @tsv' out/live.jsonl 2>/dev/null \
+            | sort -u > out/live.tsv || : > out/live.tsv
+
+          echo "LIVE=$(wc -l < out/live-urls.txt)" >> "$GITHUB_ENV"
+
+      - name: Diff against previous state
+        id: diff
+        run: |
+          PREV_SUBS="state/${DOMAIN}.subdomains.txt"
+          PREV_LIVE="state/${DOMAIN}.live.txt"
+          touch "$PREV_SUBS" "$PREV_LIVE"
+
+          sort -u "$PREV_SUBS" > out/prev-subdomains.txt
+          sort -u "$PREV_LIVE" > out/prev-live.txt
+
+          comm -23 out/subdomains.txt out/prev-subdomains.txt > out/new-subdomains.txt || true
+          comm -13 out/subdomains.txt out/prev-subdomains.txt > out/removed-subdomains.txt || true
+          comm -23 out/live-urls.txt   out/prev-live.txt       > out/new-live.txt || true
+
+          echo "NEW_SUBS=$(wc -l < out/new-subdomains.txt)" >> "$GITHUB_ENV"
+          echo "REMOVED_SUBS=$(wc -l < out/removed-subdomains.txt)" >> "$GITHUB_ENV"
+          echo "NEW_LIVE=$(wc -l < out/new-live.txt)" >> "$GITHUB_ENV"
+
+      - name: Notify Discord
+        env:
+          NOTIFY_UNCHANGED: ${{ github.event.inputs.notify_when_unchanged || 'true' }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "::warning::No Discord webhook secret set (DISCORD_WEBHOOK_URL or DISCORD_WEBHOOK) - skipping notification"
+            exit 0
+          fi
+
+          CHANGED=$(( ${NEW_SUBS:-0} + ${REMOVED_SUBS:-0} + ${NEW_LIVE:-0} ))
+          if [ "$CHANGED" -eq 0 ] && [ "$NOTIFY_UNCHANGED" != "true" ]; then
+            echo "Nothing changed; notification suppressed."
+            exit 0
+          fi
+
+          list() { head -n 15 "$1" 2>/dev/null | sed 's/^/- /'; }
+
+          PAYLOAD=$(jq -n \
+            --arg title "Subdomain Report - $DOMAIN" \
+            --arg current "${SUBS:-0}" \
+            --arg live "${LIVE:-0}" \
+            --arg new "${NEW_SUBS:-0}" \
+            --arg removed "${REMOVED_SUBS:-0}" \
+            --arg newlive "${NEW_LIVE:-0}" \
+            --arg newlist "$(list out/new-subdomains.txt)" \
+            --arg livelist "$(head -n 15 out/live-urls.txt 2>/dev/null | sed 's/^/- /')" \
+            --arg removedlist "$(list out/removed-subdomains.txt)" \
+            '{
+              embeds: [{
+                title: $title,
+                color: (if ($new|tonumber) > 0 or ($newlive|tonumber) > 0 then 15158332 else 5814783 end),
+                fields: [
+                  {name: "Subdomains", value: $current, inline: true},
+                  {name: "Live hosts", value: $live, inline: true},
+                  {name: "New subdomains", value: $new, inline: true},
+                  {name: "New live hosts", value: $newlive, inline: true},
+                  {name: "Removed", value: $removed, inline: true},
+                  {name: "Newly discovered", value: (if $newlist == "" then "None" else $newlist end)},
+                  {name: "Live hosts (httpx)", value: (if $livelist == "" then "None" else $livelist end)},
+                  {name: "Removed", value: (if $removedlist == "" then "None" else $removedlist end)}
+                ],
+                footer: {text: "CIScanner - subfinder + httpx"}
+              }]
+            }')
+
+          HTTP=$(curl -sS -o /dev/null -w '%{http_code}' -X POST \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" "$WEBHOOK")
+          echo "Discord HTTP $HTTP"
+          [ "$HTTP" -lt 400 ] || echo "::warning::Discord webhook returned $HTTP"
+
+      - name: Persist state
+        run: |
+          mkdir -p state
+          cp out/subdomains.txt "state/${DOMAIN}.subdomains.txt"
+          cp out/live-urls.txt  "state/${DOMAIN}.live.txt"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add state
+
+          if git diff --staged --quiet; then
+            echo "No state changes to commit"
+          else
+            git commit -m "chore(state): ${DOMAIN} $(date -u +%Y-%m-%dT%H:%MZ) [skip ci]"
+            git push
+          fi
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: subdomain-monitor-${{ env.DOMAIN }}
+          path: |
+            out/subdomains.txt
+            out/live-urls.txt
+            out/live.tsv
+            out/new-subdomains.txt
+            out/removed-subdomains.txt
+            out/new-live.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Subdomain Monitor - \`$DOMAIN\`"
+            echo ""
+            echo "| Metric | Count |"
+            echo "|---|---|"
+            echo "| Subdomains | ${SUBS:-0} |"
+            echo "| Live hosts (httpx) | ${LIVE:-0} |"
+            echo "| New subdomains | ${NEW_SUBS:-0} |"
+            echo "| New live hosts | ${NEW_LIVE:-0} |"
+            echo "| Removed | ${REMOVED_SUBS:-0} |"
+          } >> "$GITHUB_STEP_SUMMARY"

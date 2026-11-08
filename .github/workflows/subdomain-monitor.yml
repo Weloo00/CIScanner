@@ -24,9 +24,12 @@ concurrency:
 env:
   GO_VERSION: "1.22"
   DOMAIN: ${{ github.event.inputs.domain || vars.SCAN_DOMAIN || 'example.com' }}
-  # Keep these low: they are per-host request limits, not global throughput.
+  # Keep these low: they are the request limits. Raise only for hosts you own.
   RATE_LIMIT: "5"
   HTTP_THREADS: "5"
+  # Hard cap on how many hosts one run will probe. A big domain can otherwise
+  # burn the whole job at 5 req/s (example.com alone has thousands of names).
+  MAX_HOSTS: "2000"
   # Accept either secret name so the repo works with the old setup too.
   WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL || secrets.DISCORD_WEBHOOK }}
 
@@ -59,13 +62,16 @@ jobs:
           httpx -version
 
       - name: Enumerate subdomains
+        timeout-minutes: 15
         run: |
           mkdir -p out state
           subfinder -d "$DOMAIN" -all -silent -o out/subdomains.raw.txt || true
-          sort -u out/subdomains.raw.txt > out/subdomains.txt || : > out/subdomains.txt
+          sort -u out/subdomains.raw.txt | head -n "$MAX_HOSTS" > out/subdomains.txt || : > out/subdomains.txt
           echo "SUBS=$(wc -l < out/subdomains.txt)" >> "$GITHUB_ENV"
+          echo "Probing $(wc -l < out/subdomains.txt) hosts (cap: $MAX_HOSTS)"
 
       - name: Verify live hosts with httpx
+        timeout-minutes: 20
         run: |
           if [ ! -s out/subdomains.txt ]; then
             : > out/live-urls.txt
@@ -76,8 +82,8 @@ jobs:
 
           httpx -l out/subdomains.txt \
                 -silent -json -td -sc -title -cdn -cname -ip \
-                -rl "$RATE_LIMIT" -t "$HTTP_THREADS" -timeout 10 -retries 1 \
-                -no-color -o out/live.jsonl || true
+                -rl "$RATE_LIMIT" -t "$HTTP_THREADS" -timeout 8 -retries 0 \
+                -duc -no-color -o out/live.jsonl || true
 
           jq -r 'select(.url) | .url' out/live.jsonl 2>/dev/null | sort -u > out/live-urls.txt || : > out/live-urls.txt
           jq -r '[.status_code, ((.tech // []) | join(",")), .url] | @tsv' out/live.jsonl 2>/dev/null \

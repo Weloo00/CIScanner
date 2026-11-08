@@ -1,0 +1,17 @@
+http://autodiscover.iana.org
+http://datatracker.iana.org
+http://tools.iana.org
+https://data.iana.org
+https://feedback.iana.org
+https://ftp.iana.org
+https://handbook.int.iana.org
+https://itar.iana.org
+https://lists.iana.org
+https://maintenance.iana.org
+https://pen.iana.org
+https://rdap.iana.org
+https://rs.iana.org
+https://rzm-gtld.iana.org
+https://sle-dashboard.iana.org
+https://whois.iana.org
+https://www.iana.org

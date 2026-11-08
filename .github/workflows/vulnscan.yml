@@ -19,6 +19,10 @@ on:
         description: "Parallel requests"
         required: false
         default: "5"
+      max_hosts:
+        description: "Maximum hosts to probe in one run"
+        required: false
+        default: "2000"
   schedule:
     - cron: "0 6 * * 1"
 
@@ -35,6 +39,7 @@ env:
   SEVERITY: ${{ github.event.inputs.severity || 'critical,high,medium' }}
   RATE_LIMIT: ${{ github.event.inputs.rate_limit || '5' }}
   HTTP_THREADS: ${{ github.event.inputs.threads || '5' }}
+  MAX_HOSTS: ${{ github.event.inputs.max_hosts || '2000' }}
   WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL || secrets.DISCORD_WEBHOOK }}
 
 jobs:
@@ -66,13 +71,16 @@ jobs:
           nuclei -version
 
       - name: Enumerate subdomains
+        timeout-minutes: 15
         run: |
           mkdir -p out
           subfinder -d "$DOMAIN" -all -silent -o out/subdomains.raw.txt || true
-          sort -u out/subdomains.raw.txt > out/subdomains.txt || : > out/subdomains.txt
+          sort -u out/subdomains.raw.txt | head -n "$MAX_HOSTS" > out/subdomains.txt || : > out/subdomains.txt
           echo "SUBS=$(wc -l < out/subdomains.txt)" >> "$GITHUB_ENV"
+          echo "Probing $(wc -l < out/subdomains.txt) hosts (cap: $MAX_HOSTS)"
 
       - name: Resolve live hosts with httpx
+        timeout-minutes: 25
         run: |
           if [ ! -s out/subdomains.txt ]; then
             : > out/live-urls.txt
@@ -82,14 +90,15 @@ jobs:
 
           httpx -l out/subdomains.txt \
                 -silent -sc -title -td -cdn -cname -ip \
-                -rl "$RATE_LIMIT" -t "$HTTP_THREADS" -timeout 10 -retries 1 \
-                -no-color -o out/live.txt || true
+                -rl "$RATE_LIMIT" -t "$HTTP_THREADS" -timeout 8 -retries 0 \
+                -duc -no-color -o out/live.txt || true
 
           # httpx prints full URLs; keep only the URL column
           awk '{print $NF}' out/live.txt | grep -E '^https?://' | sort -u > out/live-urls.txt || : > out/live-urls.txt
           echo "LIVE=$(wc -l < out/live-urls.txt)" >> "$GITHUB_ENV"
 
       - name: Scan live hosts with nuclei
+        timeout-minutes: 40
         run: |
           if [ ! -s out/live-urls.txt ]; then
             echo "No live hosts - skipping nuclei"

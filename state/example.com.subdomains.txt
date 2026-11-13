@@ -63,7 +63,6 @@
 102323.example.com
 103-174-191-83.example.com
 103-244-113-202.example.com
-103.colo.example.com
 103.example.com
 104.128.64.180.example.com
 104.225.142.145.example.com
@@ -129,7 +128,6 @@
 130.unused.example.com
 130011.example.com
 130226ii.example.com
-131.188.colo.example.com
 131.unused.example.com
 1313131313137.example.com
 132.unused.example.com
@@ -152,7 +150,6 @@
 1344444448.example.com
 134615.example.com
 134892.example.com
-135.136.static.example.com
 135.unused.example.com
 135163.example.com
 135876.example.com
@@ -1163,9 +1160,7 @@
 198540.example.com
 198609.example.com
 198718.example.com
-199.static.example.com
 199156.example.com
-1994.example.com
 199402.example.com
 199408.example.com
 199498.example.com
@@ -1184,7 +1179,6 @@
 2.example.com
 20.example.com
 200757.example.com
-200845.example.com
 200867.example.com
 200966.example.com
 201-16-212-85.vm.example.com
@@ -1200,7 +1194,6 @@
 207-38-90-99.example.com
 207.unused.example.com
 20735.example.com
-20747.example.com
 208.unused.example.com
 209.unused.example.com
 20da.example.com
@@ -1209,7 +1202,6 @@
 21.example.com
 210.unused.example.com
 211.unused.example.com
-211q.unused.example.com
 212-158-171-3.vm.example.com
 212.unused.example.com
 212121233.example.com
@@ -1442,7 +1434,6 @@
 38ef.example.com
 39.example.com
 39.unused.example.com
-391.example.com
 39894.example.com
 39906.example.com
 3cx.example.com
@@ -1458,7 +1449,6 @@
 4090.example.com
 41.example.com
 42.example.com
-42.static.example.com
 42351.example.com
 4249259-cc22869.example.com
 43.example.com
@@ -1911,7 +1901,6 @@
 5.43.231.12.example.com
 5.43.231.75.example.com
 5.example.com
-5.static.example.com
 5.unused.example.com
 50.unused.example.com
 5001.example.com
@@ -1972,7 +1961,6 @@
 62.unused.example.com
 6222.example.com
 63.example.com
-633632933.example.com
 6341.example.com
 64.example.com
 64d3.example.com
@@ -1998,3 +1986,15 @@
 69.48.129.136.static.example.com
 69.48.129.137.static.example.com
 69.48.129.138.static.example.com
+69.48.129.139.static.example.com
+69.48.129.140.static.example.com
+69.48.129.141.static.example.com
+69.48.129.142.static.example.com
+69.48.129.143.static.example.com
+69.48.129.144.static.example.com
+69.48.129.146.static.example.com
+69.48.129.147.static.example.com
+69.48.129.148.static.example.com
+69.48.129.149.static.example.com
+69.48.129.150.static.example.com
+69.48.129.151.static.example.com

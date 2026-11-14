@@ -17,7 +17,6 @@
 03----may----rrdd.example.com
 03-24.example.com
 03.example.com
-0322890e.example.com
 039d.example.com
 04.example.com
 0446.example.com
@@ -25,6 +24,7 @@
 04c5.example.com
 05----apr----rrdd.example.com
 05.example.com
+053.example.com
 05ef.example.com
 06----apr----rrdd.example.com
 06.example.com
@@ -41,6 +41,7 @@
 0d66.example.com
 0e.example.com
 0fc3.example.com
+0ynrdiddb.example.com
 1-7-16-59051.example.com
 1.102.78.5.example.com
 1.9.4.example.com
@@ -95,6 +96,7 @@
 112900.example.com
 1131397.example.com
 113326.example.com
+11362.example.com
 11552.example.com
 116704.example.com
 11ec.example.com
@@ -126,6 +128,7 @@
 12asf8fsegl127.0.0.1.example.com
 13.example.com
 13.unused.example.com
+130.252.colo.example.com
 130.unused.example.com
 130011.example.com
 130226ii.example.com
@@ -133,6 +136,7 @@
 1313131313137.example.com
 132.unused.example.com
 132627.example.com
+132873.example.com
 133.unused.example.com
 133175.example.com
 13333333333333333333337.example.com
@@ -144,10 +148,8 @@
 134-119-207-210.example.com
 134-119-213-251.example.com
 134-119-218-226.example.com
-134-119-218-66.example.com
 134-119-221-159.example.com
-134.29.static.example.com
-134.44.static.example.com
+134.17.static.example.com
 134.unused.example.com
 134111111111111116.example.com
 134330.example.com
@@ -202,6 +204,7 @@
 145849.example.com
 145970.example.com
 146-0-231-246.example.com
+146-0-236-202.example.com
 146.unused.example.com
 146123.example.com
 146128.example.com
@@ -660,7 +663,6 @@
 172301.example.com
 172323.example.com
 172388.example.com
-172560.example.com
 17272.example.com
 172981.example.com
 173.unused.example.com
@@ -707,6 +709,7 @@
 176.unused.example.com
 176048.example.com
 176108.example.com
+176108c.example.com
 176113.example.com
 176118.example.com
 176123.example.com
@@ -715,6 +718,7 @@
 176953.example.com
 176958.example.com
 177244.example.com
+17741.example.com
 177412.example.com
 177671.example.com
 177676.example.com
@@ -772,7 +776,6 @@
 181533.example.com
 181538.example.com
 181543.example.com
-181543i.example.com
 181548.example.com
 181558.example.com
 181563.example.com
@@ -895,6 +898,7 @@
 18449.example.com
 184517.example.com
 184539.example.com
+184549.example.com
 184554.example.com
 184559.example.com
 18457.example.com
@@ -1130,7 +1134,6 @@
 193084.example.com
 193225.example.com
 193264.example.com
-1932647.example.com
 193270.example.com
 193685.example.com
 193691.example.com
@@ -1201,6 +1204,7 @@
 207-38-90-99.example.com
 207.unused.example.com
 20735.example.com
+207857.example.com
 208.unused.example.com
 209.unused.example.com
 20da.example.com
@@ -1222,7 +1226,6 @@
 215335.example.com
 215800.example.com
 21588.example.com
-215a.unused.example.com
 216.unused.example.com
 217.unused.example.com
 218.unused.example.com
@@ -1283,7 +1286,6 @@
 253.unused.example.com
 254.unused.example.com
 25714.example.com
-258.example.com
 2582.example.com
 259875.example.com
 26----feb----rrdd.example.com
@@ -1322,7 +1324,6 @@
 29525.example.com
 295256.example.com
 29897.example.com
-2994.example.com
 29e8.example.com
 2d8ed406.example.com
 2e34.example.com
@@ -1430,6 +1431,7 @@
 35a5.example.com
 36.example.com
 36.unused.example.com
+36049.example.com
 3688.example.com
 369.example.com
 36968.example.com
@@ -1438,6 +1440,7 @@
 37.unused.example.com
 38.example.com
 38.unused.example.com
+38183.example.com
 38460.example.com
 384d.example.com
 38af.example.com
@@ -1458,6 +1461,7 @@
 40844.example.com
 4090.example.com
 41.example.com
+41437.example.com
 42.example.com
 42351.example.com
 4249259-cc22869.example.com
@@ -1876,6 +1880,7 @@
 48.135.157.static.example.com
 48.135.158.static.example.com
 48.135.159.static.example.com
+48.142.30.static.example.com
 48.148.208.static.example.com
 48.148.209.static.example.com
 48.148.210.static.example.com
@@ -1932,6 +1937,7 @@
 549b.example.com
 55.example.com
 55.unused.example.com
+56.137.xip.example.com
 56.example.com
 56.unused.example.com
 5646.example.com
@@ -1979,6 +1985,7 @@
 66.example.com
 666809.example.com
 67.example.com
+67.static.example.com
 68.example.com
 6841.example.com
 69-48-133-96.colo.example.com
@@ -1991,10 +1998,3 @@
 69.48.129.131.static.example.com
 69.48.129.132.static.example.com
 69.48.129.133.static.example.com
-69.48.129.134.static.example.com
-69.48.129.135.static.example.com
-69.48.129.136.static.example.com
-69.48.129.137.static.example.com
-69.48.129.138.static.example.com
-69.48.129.139.static.example.com
-69.48.129.140.static.example.com
